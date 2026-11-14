@@ -499,8 +499,7 @@ if page_key == "load":
     page_header(
         "Data",
         "Load your workbook",
-        "Upload PETER_Data_Workbook.xlsx to begin. Every analysis page reads from this file. "
-        "Use the simulated workbook to test the pipeline before the real data is ready.",
+        "Upload PETER_Data_Workbook.xlsx to begin. Every analysis page reads from this file.",
     )
 
     with panel("upload", "Workbook file", "Accepts .xlsx and .xlsm files."):
@@ -822,6 +821,5 @@ elif page_key == "q3":
             "- **Cc**: linear dose effect. Significant means more carbon changes emissions proportionally.  \n"
             "- **I(Cc²)**: curved effect. Significant means diminishing returns or an optimum dose.  \n"
             "- **Cc:x1 / Cc:x2 / Cc:x3**: the carbon effect depends on temperature, time or ratio.  \n"
-            "- PM2.5 and PM10 are excluded because the sensor was at ceiling throughout all runs.  \n"
-            "- Results from the **simulated workbook** only test the code and are not project findings."
+            "- PM2.5 and PM10 are excluded because the sensor was at ceiling throughout all runs."
         )
