@@ -1,5 +1,8 @@
 """PETER Study — Streamlit Web Interface
 Run:  streamlit run peter_app.py
+
+Place the accompanying config.toml at  .streamlit/config.toml  (next to this file)
+so native widgets pick up the same colours as the custom CSS below.
 """
 
 import os, sys, pathlib, importlib.util, re, io, contextlib, glob
@@ -8,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 from PIL import Image as PILImage
+from cycler import cycler
 
 st.set_page_config(
     page_title="PETER Study",
@@ -16,341 +20,353 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# ─────────────────────────────────────────────── design tokens
+BRAND  = "#14452f"   # spruce
+MOSS   = "#3f7d58"
+SAGE   = "#d9e7de"
+INK    = "#16201b"
+SLATE  = "#5b6760"
+LINE   = "#dfe4e0"
+
 # ─────────────────────────────────────────────── CSS
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body, [class*="css"], .stApp {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #f5f6f8;
-    color: #111827;
+:root {
+    --brand:      #14452f;
+    --brand-deep: #0e3321;
+    --moss:       #3f7d58;
+    --sage:       #d9e7de;
+    --sage-soft:  #eef4f0;
+    --bg:         #eef1ee;
+    --paper:      #ffffff;
+    --ink:        #16201b;
+    --slate:      #5b6760;
+    --faint:      #8c978f;
+    --line:       #dfe4e0;
+    --line-strong:#c9d1cb;
+    --amber-bg:   #fff7e6;
+    --amber-line: #f0d9a4;
+    --amber-ink:  #6b4710;
+    --blue-bg:    #edf4fb;
+    --blue-line:  #c3d9ee;
+    --blue-ink:   #1d4a73;
 }
 
-/* ── Hide default streamlit chrome ── */
-#MainMenu, footer, header { visibility: hidden; }
-[data-testid="stSidebar"] { display: none; }
-.block-container { padding: 0 !important; max-width: 100% !important; }
+/* ── Base ── */
+.stApp {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.stApp button, .stApp input, .stApp textarea, .stApp select {
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li {
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: #334039;
+}
+[data-testid="stCaptionContainer"] { color: var(--slate); }
 
-/* ── Top navigation bar ── */
-.topnav {
+/* ── Hide Streamlit chrome ── */
+#MainMenu, footer,
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stSidebar"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+
+/* ── Page container (replaces the old unclosed .page-shell div) ── */
+.block-container {
+    max-width: 1180px !important;
+    padding: 18px 28px 72px !important;
+}
+
+/* ── Top navigation ── */
+.st-key-topnav {
     position: sticky;
-    top: 0;
+    top: 12px;
     z-index: 999;
-    background: #ffffff;
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    align-items: center;
-    padding: 0 32px;
-    height: 60px;
-    gap: 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-}
-.topnav-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-right: 40px;
-    text-decoration: none;
-}
-.topnav-brand-icon {
-    width: 32px;
-    height: 32px;
-    background: #0f4c35;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    color: white;
-    flex-shrink: 0;
-}
-.topnav-brand-text {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #0f4c35;
-    letter-spacing: -0.01em;
-    white-space: nowrap;
-}
-.topnav-brand-sub {
-    font-size: 0.7rem;
-    color: #6b7280;
-    font-weight: 400;
-    white-space: nowrap;
-}
-.nav-links {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex: 1;
-}
-.nav-link {
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--line);
+    border-radius: 10px;
     padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 0.84rem;
-    font-weight: 500;
-    color: #374151;
-    text-decoration: none;
-    white-space: nowrap;
-    cursor: pointer;
-    border: none;
-    background: none;
-    transition: background 0.15s, color 0.15s;
+    margin-bottom: 32px;
 }
-.nav-link:hover { background: #f3f4f6; color: #111827; }
-.nav-link.active {
-    background: #ecfdf5;
-    color: #0f4c35;
-    font-weight: 600;
-}
-.nav-link .step-dot {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #e5e7eb;
-    color: #6b7280;
-    font-size: 0.65rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.brand { display: flex; align-items: center; gap: 11px; }
+.brand-mark {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    background: var(--brand);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
     flex-shrink: 0;
 }
-.nav-link.active .step-dot {
-    background: #0f4c35;
-    color: #fff;
-}
-.nav-link.done .step-dot {
-    background: #10b981;
-    color: #fff;
-}
-.nav-link.locked { opacity: 0.4; cursor: not-allowed; }
-.nav-sep {
-    width: 1px;
-    height: 20px;
-    background: #e5e7eb;
-    margin: 0 6px;
-}
-.nav-badge {
-    font-size: 0.65rem;
-    background: #dcfce7;
-    color: #15803d;
-    border-radius: 4px;
-    padding: 1px 6px;
-    font-weight: 600;
-}
+.brand-name { font-size: 0.95rem; font-weight: 700; color: var(--brand); line-height: 1.15; letter-spacing: -0.01em; }
+.brand-sub  { font-size: 0.72rem; color: var(--slate); line-height: 1.2; }
+.nav-version { text-align: right; font-size: 0.72rem; color: var(--faint); }
 
-/* ── Page shell ── */
-.page-shell {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 36px 32px 60px;
+/* the nav is a native st.radio restyled as tabs, so clicking never reloads the session */
+.st-key-topnav [data-testid="stRadio"] > label { display: none; }
+.st-key-topnav [role="radiogroup"] { gap: 4px; flex-wrap: nowrap; justify-content: center; }
+.st-key-topnav [role="radiogroup"] > label {
+    margin: 0;
+    padding: 7px 16px;
+    border-radius: 7px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: background 0.15s;
+}
+.st-key-topnav [role="radiogroup"] > label > div:first-child { display: none; }
+.st-key-topnav [role="radiogroup"] > label p {
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: var(--slate);
+    white-space: nowrap;
+}
+.st-key-topnav [role="radiogroup"] > label:hover { background: var(--sage-soft); }
+.st-key-topnav [role="radiogroup"] > label:hover p { color: var(--ink); }
+.st-key-topnav [role="radiogroup"] > label:has(input:checked) {
+    background: var(--sage-soft);
+    border-bottom-color: var(--brand);
+    border-radius: 7px 7px 0 0;
+}
+.st-key-topnav [role="radiogroup"] > label:has(input:checked) p {
+    color: var(--brand);
+    font-weight: 600;
 }
 
 /* ── Page header ── */
-.page-header { margin-bottom: 28px; }
-.page-header h1 {
-    font-size: 1.6rem;
+.page-header { margin: 0 0 28px; }
+.breadcrumb { font-size: 0.8rem; color: var(--faint); margin-bottom: 8px; }
+.breadcrumb .sep { margin: 0 7px; color: var(--line-strong); }
+.stApp .page-header h1 {
+    font-size: 1.85rem;
     font-weight: 700;
-    color: #111827;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
+    color: var(--ink);
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+    margin: 0 0 8px;
+    padding: 0;
 }
-.page-header p {
-    font-size: 0.9rem;
-    color: #6b7280;
-    margin-top: 6px;
-    line-height: 1.6;
-}
-.breadcrumb {
-    font-size: 0.75rem;
-    color: #9ca3af;
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-/* ── Cards ── */
-.card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 20px;
-}
-.card-title {
+.stApp .page-header p {
     font-size: 0.95rem;
-    font-weight: 600;
-    color: #111827;
-    margin-bottom: 4px;
-}
-.card-desc {
-    font-size: 0.82rem;
-    color: #6b7280;
-    margin-bottom: 16px;
-    line-height: 1.5;
+    color: var(--slate);
+    line-height: 1.6;
+    max-width: 68ch;
+    margin: 0;
 }
 
-/* ── Stat row ── */
+/* ── Panels (keyed containers) ── */
+[class*="st-key-panel_"] {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 22px 24px 20px;
+    margin-bottom: 18px;
+}
+.panel-head { margin-bottom: 14px; }
+.panel-title {
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    padding-left: 11px;
+    border-left: 3px solid var(--moss);
+    line-height: 1.3;
+}
+.panel-desc {
+    font-size: 0.85rem;
+    color: var(--slate);
+    line-height: 1.6;
+    margin-top: 6px;
+    padding-left: 14px;
+    max-width: 80ch;
+}
+
+/* ── Stat band: one joined strip instead of separate cards ── */
 .stat-row {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
 }
 .stat-box {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
     padding: 16px 20px;
-    flex: 1;
-    min-width: 110px;
+    border-right: 1px solid var(--line);
 }
-.stat-box .s-label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #9ca3af;
-    margin-bottom: 6px;
-}
+.stat-box:last-child { border-right: none; }
+.stat-box .s-label { font-size: 0.78rem; color: var(--slate); margin-bottom: 4px; }
 .stat-box .s-val {
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: #0f4c35;
-    line-height: 1;
-}
-.stat-box .s-sub {
-    font-size: 0.72rem;
-    color: #9ca3af;
-    margin-top: 2px;
-}
-
-/* ── Section heading inside page ── */
-.section-heading {
-    font-size: 1rem;
+    font-size: 1.7rem;
     font-weight: 600;
-    color: #111827;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #e5e7eb;
-    margin: 28px 0 16px;
+    color: var(--brand);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
 }
+.stat-box .s-sub { font-size: 0.74rem; color: var(--faint); margin-top: 3px; }
 
-/* ── Step callout ── */
+/* ── Step list (empty state) ── */
 .step-callout {
     display: flex;
     align-items: flex-start;
     gap: 14px;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 16px 18px;
-    margin-bottom: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
 }
+.step-callout:last-child { border-bottom: none; }
 .step-callout .sc-num {
-    width: 28px;
-    height: 28px;
+    width: 26px; height: 26px;
     border-radius: 50%;
-    background: #0f4c35;
-    color: #fff;
-    font-size: 0.75rem;
+    background: var(--sage);
+    color: var(--brand);
+    font-size: 0.78rem;
     font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
-    margin-top: 1px;
 }
-.step-callout .sc-body .sc-title {
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: #111827;
-    margin-bottom: 2px;
-}
-.step-callout .sc-body .sc-text {
-    font-size: 0.82rem;
-    color: #6b7280;
-    line-height: 1.5;
-}
+.sc-title { font-size: 0.92rem; font-weight: 600; color: var(--ink); }
+.sc-text  { font-size: 0.84rem; color: var(--slate); line-height: 1.5; margin-top: 1px; }
 
-/* ── Info/note box ── */
-.note-box {
-    background: #fffbeb;
-    border: 1px solid #fde68a;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 0.82rem;
-    color: #78350f;
+/* ── Callouts ── */
+.callout {
+    border-radius: 6px;
+    padding: 11px 15px;
+    font-size: 0.85rem;
     line-height: 1.6;
+    border: 1px solid;
+    border-left-width: 3px;
 }
-.info-box {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 0.82rem;
-    color: #1e40af;
-    line-height: 1.6;
-}
+.callout.note { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber-ink); }
+.callout.info { background: var(--blue-bg);  border-color: var(--blue-line);  color: var(--blue-ink); }
 
-/* ── Streamlit overrides ── */
-div[data-testid="stButton"] > button {
-    font-family: 'Inter', sans-serif;
-    font-weight: 600;
-    font-size: 0.84rem;
+/* ── Buttons ── */
+.stApp [data-testid="stBaseButton-primary"],
+.stApp button[kind="primary"] {
+    background: var(--brand);
+    border: 1px solid var(--brand);
+    color: #fff;
     border-radius: 8px;
-    padding: 9px 20px;
-    transition: all 0.15s;
+    font-weight: 600;
+    font-size: 0.86rem;
+    padding: 0.5rem 1.3rem;
+    transition: background 0.15s, border-color 0.15s;
 }
-div[data-testid="stButton"] > button[kind="primary"] {
-    background: #0f4c35;
-    border: none;
+.stApp [data-testid="stBaseButton-primary"]:hover,
+.stApp button[kind="primary"]:hover {
+    background: var(--brand-deep);
+    border-color: var(--brand-deep);
     color: #fff;
 }
-div[data-testid="stButton"] > button[kind="primary"]:hover {
-    background: #0d3d2a;
-    box-shadow: 0 2px 8px rgba(15,76,53,0.25);
+.stApp [data-testid="stBaseButton-primary"]:focus-visible,
+.stApp button[kind="primary"]:focus-visible {
+    outline: 3px solid var(--sage);
+    outline-offset: 1px;
 }
-div[data-testid="stButton"] > button[kind="secondary"] {
-    background: #fff;
-    border: 1px solid #d1d5db;
-    color: #374151;
-}
-[data-testid="stExpander"] {
-    border: 1px solid #e5e7eb !important;
-    border-radius: 10px !important;
-    background: #fff !important;
-}
-[data-testid="stExpander"] summary {
-    font-size: 0.85rem;
-    font-weight: 500;
-}
-[data-testid="stFileUploader"] {
-    border-radius: 10px;
-}
-div[data-testid="stSelectbox"] label,
-div[data-testid="stSlider"] label,
-div[data-testid="stRadio"] label {
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: #374151;
-}
-[data-testid="stDataFrame"] {
+.stApp [data-testid="stBaseButton-primary"] p,
+.stApp button[kind="primary"] p { color: #fff; font-size: 0.86rem; }
+
+.stApp [data-testid="stBaseButton-secondary"],
+.stApp [data-testid="stDownloadButton"] button {
+    background: var(--paper);
+    border: 1px solid var(--line-strong);
+    color: var(--ink);
     border-radius: 8px;
-    border: 1px solid #e5e7eb;
+    font-weight: 500;
+    font-size: 0.84rem;
+    padding: 0.4rem 1rem;
+}
+.stApp [data-testid="stBaseButton-secondary"]:hover,
+.stApp [data-testid="stDownloadButton"] button:hover {
+    border-color: var(--moss);
+    color: var(--brand);
+    background: var(--sage-soft);
+}
+
+/* ── Inputs ── */
+div[data-testid="stSelectbox"] label p,
+div[data-testid="stSlider"] label p,
+div[data-testid="stRadio"] label p { font-size: 0.84rem; font-weight: 500; color: var(--ink); }
+
+[data-testid="stFileUploaderDropzone"] {
+    background: var(--sage-soft);
+    border: 1.5px dashed #9fc4ad;
+    border-radius: 8px;
+}
+[data-testid="stFileUploaderDropzone"]:hover { border-color: var(--moss); }
+
+/* ── Expanders, tables, code, images ── */
+[data-testid="stExpander"] {
+    border: 1px solid var(--line) !important;
+    border-radius: 8px !important;
+    background: var(--paper) !important;
+    margin-top: 6px;
+}
+[data-testid="stExpander"] summary p { font-size: 0.88rem; font-weight: 500; }
+
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--line);
+    border-radius: 8px;
     overflow: hidden;
 }
-[data-testid="stAlert"] { border-radius: 8px; font-size: 0.84rem; }
-p, li { font-size: 0.88rem; line-height: 1.65; color: #374151; }
-h3 { font-size: 1rem; font-weight: 600; color: #111827; }
+[data-testid="stCode"] pre { font-size: 0.78rem; line-height: 1.55; }
+[data-testid="stCode"] { border: 1px solid var(--line); border-radius: 8px; }
+
+[data-testid="stImage"] img {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+}
+[data-testid="stImageCaption"] { color: var(--slate); font-size: 0.78rem; }
+
+[data-testid="stAlert"] { border-radius: 8px; font-size: 0.86rem; }
+
+/* ── Narrow screens ── */
+@media (max-width: 820px) {
+    .block-container { padding: 12px 14px 56px !important; }
+    .st-key-topnav { top: 6px; padding: 8px 10px; }
+    .st-key-topnav [role="radiogroup"] { overflow-x: auto; justify-content: flex-start; }
+    .nav-version, .brand-sub { display: none; }
+    [class*="st-key-panel_"] { padding: 16px 14px; }
+    .stApp .page-header h1 { font-size: 1.5rem; }
+}
 </style>
 """, unsafe_allow_html=True)
+
+# Matplotlib look for the charts drawn inside this app (scoped with rc_context,
+# so figures produced by peter_analysis.py are left untouched).
+MPL_RC = {
+    "font.family": "sans-serif",
+    "font.size": 9.5,
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+    "savefig.facecolor": "white",
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.edgecolor": "#c9d1cb",
+    "axes.labelcolor": "#334039",
+    "axes.titlesize": 11,
+    "axes.titleweight": "600",
+    "axes.titlelocation": "left",
+    "axes.grid": True,
+    "axes.axisbelow": True,
+    "grid.color": "#eef1ee",
+    "grid.linewidth": 0.9,
+    "xtick.color": SLATE,
+    "ytick.color": SLATE,
+    "legend.frameon": False,
+    "axes.prop_cycle": cycler(color=[BRAND, "#d98a1f", "#3b7fb8", "#b8463b", "#7a5ca8", "#5c9c7a"]),
+}
 
 
 # ─────────────────────────────────────────────── load pa module
@@ -395,7 +411,14 @@ def capture(func, *args, **kwargs):
         result = func(*args, **kwargs)
     return result, buf.getvalue()
 
+def go(page):
+    """Button callback: switch page without reloading the session."""
+    st.session_state["nav"] = page
+
+# ─────────────────────────────────────────────── UI helpers
 def stat(label, value, sub=""):
+    if isinstance(value, (int, np.integer)):
+        value = f"{int(value):,}"
     return (f'<div class="stat-box"><div class="s-label">{label}</div>'
             f'<div class="s-val">{value}</div>'
             f'<div class="s-sub">{sub}</div></div>')
@@ -404,411 +427,401 @@ def step_note(num, title, text):
     st.markdown(
         f'<div class="step-callout">'
         f'<div class="sc-num">{num}</div>'
-        f'<div class="sc-body"><div class="sc-title">{title}</div>'
+        f'<div><div class="sc-title">{title}</div>'
         f'<div class="sc-text">{text}</div></div></div>',
         unsafe_allow_html=True,
     )
 
-# ─────────────────────────────────────────────── top nav
-data_ok = _get("wb_path") is not None
-q1a_ok  = _get("wash_model") is not None
-q1b_ok  = _get("em_results") is not None
+def callout(kind, text):
+    st.markdown(f'<div class="callout {kind}">{text}</div>', unsafe_allow_html=True)
 
-PAGES = [
-    ("load", "Data",           "Load & inspect",    data_ok),
-    ("q1",   "Q1 — Washing",   "Yield & emissions", q1a_ok),
-    ("q2",   "Q2 — Window",    "Operating window",  _get("window_grid") is not None),
-    ("q3",   "Q3 — Carbon",    "Carbon effect",     False),
-]
-
-# page selection via query params (fallback to session)
-qp = st.query_params
-if "page" not in qp:
-    qp["page"] = _get("current_page", "load")
-page_key = qp.get("page", "load")
-_set("current_page", page_key)
-
-def nav_item(key, num, short, long, done):
-    is_active = page_key == key
-    cls = "nav-link active" if is_active else ("nav-link done" if done else "nav-link")
-    dot = "✓" if done else str(num)
-    dot_cls = "step-dot"
-    badge = f'<span class="nav-badge">Done</span>' if done and not is_active else ""
-    return (f'<a class="{cls}" href="?page={key}">'
-            f'<span class="{dot_cls}">{dot}</span>'
-            f'<span>{short}</span>{badge}</a>')
-
-nav_html = (
-    '<nav class="topnav">'
-    '<div class="topnav-brand">'
-    '<div class="topnav-brand-icon">🌲</div>'
-    '<div><div class="topnav-brand-text">PETER Study</div>'
-    '<div class="topnav-brand-sub">Analysis Pipeline</div></div>'
-    '</div>'
-    '<div class="nav-sep"></div>'
-    '<div class="nav-links">'
-    + nav_item("load", 1, "Data",         "Load & inspect",    data_ok)
-    + nav_item("q1",   2, "Q1 — Washing", "Yield & emissions", q1a_ok)
-    + nav_item("q2",   3, "Q2 — Window",  "Operating window",  _get("window_grid") is not None)
-    + nav_item("q3",   4, "Q3 — Carbon",  "Carbon effect",     False)
-    + '</div>'
-    + f'<div style="margin-left:auto;font-size:0.72rem;color:#9ca3af;">v{pa_ver}</div>'
-    + '</nav>'
-)
-st.markdown(nav_html, unsafe_allow_html=True)
-
-
-# ══════════════════════════════════════════ helpers for page shell
-def page_open(crumb, title, subtitle):
-    st.markdown('<div class="page-shell">', unsafe_allow_html=True)
+def page_header(crumb, title, subtitle):
     st.markdown(
         f'<div class="page-header">'
-        f'<div class="breadcrumb">PETER Study <span>›</span> {crumb}</div>'
+        f'<div class="breadcrumb">PETER Study<span class="sep">›</span>{crumb}</div>'
         f'<h1>{title}</h1><p>{subtitle}</p></div>',
         unsafe_allow_html=True,
     )
 
-def page_close():
-    st.markdown('</div>', unsafe_allow_html=True)
+def _keyed_container(key):
+    # st.container(key=...) needs Streamlit >= 1.39; fall back gracefully on older versions.
+    try:
+        return st.container(key=key)
+    except TypeError:
+        return st.container()
 
-def section(title):
-    st.markdown(f'<div class="section-heading">{title}</div>', unsafe_allow_html=True)
+@contextlib.contextmanager
+def panel(key, title, desc=""):
+    with _keyed_container(f"panel_{key}"):
+        desc_html = f'<div class="panel-desc">{desc}</div>' if desc else ""
+        st.markdown(
+            f'<div class="panel-head"><div class="panel-title">{title}</div>{desc_html}</div>',
+            unsafe_allow_html=True,
+        )
+        yield
+
+# ─────────────────────────────────────────────── top nav
+data_ok = _get("wb_path") is not None
+q1a_ok  = _get("wash_model") is not None
+q2_ok   = _get("window_grid") is not None
+
+NAV = [
+    ("load", "Data",       data_ok),
+    ("q1",   "Q1 Washing", q1a_ok),
+    ("q2",   "Q2 Window",  q2_ok),
+    ("q3",   "Q3 Carbon",  False),
+]
+NAV_LABEL = {k: (f"✓ {name}" if done else name) for k, name, done in NAV}
+
+st.session_state.setdefault("nav", "load")
+
+with _keyed_container("topnav"):
+    c_brand, c_nav, c_ver = st.columns([2.3, 6, 1.2], vertical_alignment="center")
+    with c_brand:
+        st.markdown(
+            '<div class="brand"><div class="brand-mark">🌲</div>'
+            '<div><div class="brand-name">PETER Study</div>'
+            '<div class="brand-sub">Analysis pipeline</div></div></div>',
+            unsafe_allow_html=True,
+        )
+    with c_nav:
+        page_key = st.radio(
+            "Navigate", [k for k, _, _ in NAV],
+            format_func=lambda k: NAV_LABEL[k],
+            horizontal=True, key="nav", label_visibility="collapsed",
+        )
+    with c_ver:
+        st.markdown(f'<div class="nav-version">v{pa_ver}</div>', unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════ PAGE: LOAD DATA
 if page_key == "load":
-    page_open(
-        "Load Data",
+    page_header(
+        "Data",
         "Load your workbook",
-        "Upload PETER_Data_Workbook.xlsx to begin. All analysis pages use this file. "
+        "Upload PETER_Data_Workbook.xlsx to begin. Every analysis page reads from this file. "
         "Use the simulated workbook to test the pipeline before the real data is ready.",
     )
 
-    uploaded = st.file_uploader("Choose your workbook (.xlsx)", type=["xlsx", "xlsm"])
-    if uploaded:
-        wb_path = os.path.join(OUT, uploaded.name)
-        with open(wb_path, "wb") as f: f.write(uploaded.read())
-        try:
-            pa.check_workbook(wb_path)
-            _set("wb_path", wb_path)
-            wash = pa.load_washing(wb_path)
-            runs = pa.load_runs(wb_path)
-            _set("wash", wash); _set("runs", runs)
-            st.success(f"✅ Loaded: **{uploaded.name}**")
-        except Exception as e:
-            st.error(f"Problem reading workbook: {e}"); st.stop()
+    with panel("upload", "Workbook file", "Accepts .xlsx and .xlsm files."):
+        uploaded = st.file_uploader("Choose your workbook (.xlsx)", type=["xlsx", "xlsm"],
+                                    label_visibility="collapsed")
+        if uploaded:
+            wb_path = os.path.join(OUT, uploaded.name)
+            with open(wb_path, "wb") as f: f.write(uploaded.read())
+            try:
+                pa.check_workbook(wb_path)
+                _set("wb_path", wb_path)
+                wash = pa.load_washing(wb_path)
+                runs = pa.load_runs(wb_path)
+                _set("wash", wash); _set("runs", runs)
+                st.success(f"Loaded **{uploaded.name}**")
+            except Exception as e:
+                st.error(f"Problem reading workbook: {e}"); st.stop()
 
     wb = _get("wb_path")
     if wb:
         wash = _get("wash"); runs = _get("runs")
 
-        # stat row
         st.markdown(
             '<div class="stat-row">'
             + stat("Wash runs",    len(wash))
-            + stat("Md recorded",  wash["Md"].notna().sum(), "final dry mass")
+            + stat("Md recorded",  int(wash["Md"].notna().sum()), "final dry mass")
             + stat("PETER rows",   len(runs))
-            + stat("Washes",       runs["wash"].nunique())
-            + stat("Carbon doses", runs["Cpct"].nunique())
+            + stat("Washes",       int(runs["wash"].nunique()))
+            + stat("Carbon doses", int(runs["Cpct"].nunique()))
             + '</div>',
             unsafe_allow_html=True,
         )
 
-        section("Sheet previews")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.caption("**Washing sheet**")
-            st.dataframe(wash[["Run", "T", "t", "W", "Md", "SRY"]].round(2), height=260)
-        with c2:
-            st.caption("**PETER_runs sheet** (first 20 rows)")
-            st.dataframe(runs[["wash", "T", "t", "W", "Cpct",
-                                "HCHO_net_peak", "TVOC_net_peak",
-                                "CO_net_peak", "CO2_net_peak"]].head(20).round(2), height=260)
+        with panel("previews", "Sheet previews"):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.caption("**Washing sheet**")
+                st.dataframe(wash[["Run", "T", "t", "W", "Md", "SRY"]].round(2), height=260)
+            with c2:
+                st.caption("**PETER_runs sheet** (first 20 rows)")
+                st.dataframe(runs[["wash", "T", "t", "W", "Cpct",
+                                    "HCHO_net_peak", "TVOC_net_peak",
+                                    "CO_net_peak", "CO2_net_peak"]].head(20).round(2), height=260)
 
-        section("Missing values")
-        cols = ["Md"] + [c for c in runs.columns if c.endswith(("net_peak", "net_plateau"))]
-        mv   = pd.concat([
-            wash[["Md"]].isna().sum().rename("Washing"),
-            runs[[c for c in cols[1:] if c in runs]].isna().sum().rename("PETER_runs"),
-        ], axis=1).fillna("")
-        st.dataframe(mv)
+        with panel("missing", "Missing values"):
+            cols = ["Md"] + [c for c in runs.columns if c.endswith(("net_peak", "net_plateau"))]
+            mv   = pd.concat([
+                wash[["Md"]].isna().sum().rename("Washing"),
+                runs[[c for c in cols[1:] if c in runs]].isna().sum().rename("PETER_runs"),
+            ], axis=1).fillna("")
+            st.dataframe(mv)
+            callout("note",
+                    "Empty cells in Md or any emission column are fine. "
+                    "The analysis skips any response with fewer than 20 non-missing values.")
 
-        st.markdown(
-            '<div class="note-box">ℹ️ Empty cells in Md or any emission column are fine — '
-            'the analysis skips any response with fewer than 20 non-missing values.</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<br><a href="?page=q1" style="display:inline-block;background:#0f4c35;'
-            'color:#fff;padding:10px 24px;border-radius:8px;font-size:0.85rem;'
-            'font-weight:600;text-decoration:none;">Continue to Q1 →</a>',
-            unsafe_allow_html=True,
-        )
+        st.button("Continue to Q1", type="primary", on_click=go, args=("q1",))
     else:
-        step_note(1, "Upload your workbook", "Click the file picker above to choose your .xlsx file.")
-        step_note(2, "Inspect both sheets", "A preview of the Washing and PETER_runs sheets appears here.")
-        step_note(3, "Navigate to Q1", "Use the top navigation bar to move through the analysis in order.")
-
-    page_close()
+        with panel("steps", "How it works"):
+            step_note(1, "Upload your workbook", "Use the file picker above to choose your .xlsx file.")
+            step_note(2, "Inspect both sheets", "A preview of the Washing and PETER_runs sheets appears here.")
+            step_note(3, "Work through Q1 to Q3", "Use the navigation bar at the top to move through the analysis in order.")
 
 
 # ══════════════════════════════════════════ PAGE: Q1
 elif page_key == "q1":
-    page_open(
-        "Q1 — Washing",
+    page_header(
+        "Q1 Washing",
         "Does hot-water washing reduce emissions?",
         "Run Part A to fit the yield model, then Part B to analyse HCHO, TVOC, CO and CO₂. "
-        "Work through them in order — Part B uses the yield model from Part A.",
+        "Work through them in order, because Part B uses the yield model from Part A.",
     )
 
     wb = _get("wb_path")
     if not wb:
-        st.warning("Upload your workbook on the **Data** page first."); page_close(); st.stop()
+        st.warning("Upload your workbook on the **Data** page first."); st.stop()
     wash = _get("wash"); runs = _get("runs")
 
     # ── Part A
-    section("Part A — Yield model (Md)")
-    st.markdown(
-        "Fits a **second-order response surface** for final dry mass after washing. "
+    with panel(
+        "parta", "Part A: Yield model (Md)",
+        "Fits a <b>second-order response surface</b> for final dry mass after washing. "
         "Reports R², adjusted R², predicted R² (PRESS), Box-Cox transform check, "
-        "Type II ANOVA, lack of fit, residual diagnostics and the reduced model equation."
-    )
+        "Type II ANOVA, lack of fit, residual diagnostics and the reduced model equation.",
+    ):
+        if st.button("Run yield model", type="primary"):
+            with st.spinner("Fitting response surface for Md…"):
+                wm, out1 = capture(pa.part1, wash, OUT)
+            _set("wash_model", wm); _set("part1_log", out1)
+            st.success("Yield model fitted.")
 
-    if st.button("Run yield model", type="primary"):
-        with st.spinner("Fitting response surface for Md…"):
-            wm, out1 = capture(pa.part1, wash, OUT)
-        _set("wash_model", wm); _set("part1_log", out1)
-        st.success("Yield model fitted.")
-
-    if _get("wash_model"):
-        with st.expander("Full model output"):
-            st.code(_get("part1_log"), language="")
-        c1, c2 = st.columns(2)
-        with c1: _img(os.path.join(OUT, "part1_fit.png"), "Observed vs fitted Md")
-        with c2: _img(os.path.join(OUT, "diag_part1.png"), "Residual diagnostics")
-        eq_path = os.path.join(OUT, "equation_Md.txt")
-        if os.path.exists(eq_path):
-            with st.expander("Model equation"):
-                st.code(open(eq_path).read())
-            _dl(eq_path, "Download equation (.txt)")
-        _dl(os.path.join(OUT, "part1_predictions.csv"), "Download predictions (.csv)")
+        if _get("wash_model"):
+            with st.expander("Full model output"):
+                st.code(_get("part1_log"), language="")
+            c1, c2 = st.columns(2)
+            with c1: _img(os.path.join(OUT, "part1_fit.png"), "Observed vs fitted Md")
+            with c2: _img(os.path.join(OUT, "diag_part1.png"), "Residual diagnostics")
+            eq_path = os.path.join(OUT, "equation_Md.txt")
+            if os.path.exists(eq_path):
+                with st.expander("Model equation"):
+                    with open(eq_path) as fh: st.code(fh.read())
+            d1, d2, _sp = st.columns([1.2, 1.2, 4])
+            with d1: _dl(eq_path, "Equation (.txt)")
+            with d2: _dl(os.path.join(OUT, "part1_predictions.csv"), "Predictions (.csv)")
 
     # ── Part B
-    section("Part B — Emission analysis (split-plot)")
-    st.markdown(
-        "Uses a **linear mixed model** (wash = random intercept) for each gas. "
+    with panel(
+        "partb", "Part B: Emission analysis (split-plot)",
+        "Uses a <b>linear mixed model</b> (wash as random intercept) for each gas. "
         "Temperature, time and water ratio are whole-plot factors; "
-        "carbon dose is the sub-plot factor tested within each wash."
-    )
+        "carbon dose is the sub-plot factor tested within each wash.",
+    ):
+        if _get("wash_model") is None:
+            callout("info", "Run Part A above first. The emission analysis uses the yield model.")
+        elif st.button("Run emission analysis", type="primary"):
+            with st.spinner("Fitting split-plot models for all four gases…"):
+                em_results, out2 = capture(pa.part2, runs, OUT, _get("wash_model"))
+            _set("em_results", em_results); _set("part2_log", out2)
+            st.success("Emission models fitted.")
 
-    if _get("wash_model") is None:
-        st.markdown(
-            '<div class="info-box">Run Part A above first — the emission analysis '
-            'uses the yield model.</div>', unsafe_allow_html=True,
-        )
-    elif st.button("Run emission analysis", type="primary"):
-        with st.spinner("Fitting split-plot models for all four gases…"):
-            em_results, out2 = capture(pa.part2, runs, OUT, _get("wash_model"))
-        _set("em_results", em_results); _set("part2_log", out2)
-        st.success("Emission models fitted.")
+        if _get("part2_log"):
+            with st.expander("Full emission output"):
+                st.code(_get("part2_log"), language="")
 
     if _get("part2_log"):
-        with st.expander("Full emission output"):
-            st.code(_get("part2_log"), language="")
-
         bh_path = os.path.join(OUT, "bh_correction.csv")
         if os.path.exists(bh_path):
-            section("Multiple-testing correction (Benjamini-Hochberg FDR)")
-            st.caption("Controls the false-discovery rate across all gas × response-type model F-tests.")
-            st.dataframe(pd.read_csv(bh_path, index_col=0).round(4))
-            _dl(bh_path, "Download BH table (.csv)")
+            with panel(
+                "bh", "Multiple-testing correction (Benjamini-Hochberg FDR)",
+                "Controls the false-discovery rate across all gas and response-type model F-tests.",
+            ):
+                st.dataframe(pd.read_csv(bh_path, index_col=0).round(4))
+                _dl(bh_path, "BH table (.csv)")
 
-        section("Residual diagnostic plots")
         diag_imgs = sorted(glob.glob(os.path.join(OUT, "diag_*_net_peak.png")))
         if diag_imgs:
-            cols = st.columns(min(len(diag_imgs), 2))
-            for i, f in enumerate(diag_imgs):
-                g = os.path.basename(f).replace("diag_", "").replace("_net_peak.png", "")
-                cols[i % 2].image(PILImage.open(f), caption=f"{g} net peak", use_container_width=True)
+            with panel("diag", "Residual diagnostic plots"):
+                cols = st.columns(min(len(diag_imgs), 2))
+                for i, f in enumerate(diag_imgs):
+                    g = os.path.basename(f).replace("diag_", "").replace("_net_peak.png", "")
+                    cols[i % 2].image(PILImage.open(f), caption=f"{g} net peak", use_container_width=True)
 
-        section("Reduced whole-plot equations")
-        for f in sorted(glob.glob(os.path.join(OUT, "equation_*_net_peak.txt"))):
-            g = os.path.basename(f).replace("equation_", "").replace("_net_peak.txt", "")
-            with st.expander(f"{g} equation"):
-                st.code(open(f).read())
+        eq_files = sorted(glob.glob(os.path.join(OUT, "equation_*_net_peak.txt")))
+        if eq_files:
+            with panel("eqs", "Reduced whole-plot equations"):
+                for f in eq_files:
+                    g = os.path.basename(f).replace("equation_", "").replace("_net_peak.txt", "")
+                    with st.expander(f"{g} equation"):
+                        with open(f) as fh: st.code(fh.read())
 
-        st.markdown(
-            '<br><a href="?page=q2" style="display:inline-block;background:#0f4c35;'
-            'color:#fff;padding:10px 24px;border-radius:8px;font-size:0.85rem;'
-            'font-weight:600;text-decoration:none;">Continue to Q2 →</a>',
-            unsafe_allow_html=True,
-        )
-
-    page_close()
+        st.button("Continue to Q2", type="primary", on_click=go, args=("q2",))
 
 
 # ══════════════════════════════════════════ PAGE: Q2
 elif page_key == "q2":
-    page_open(
-        "Q2 — Operating Window",
+    page_header(
+        "Q2 Window",
         "What is the operating window?",
-        "Find washing conditions that simultaneously keep yield above the target "
-        "and cut all four gas emissions by the required fraction. Adjust the controls and calculate.",
+        "Find washing conditions that keep yield above the target and cut all four gas "
+        "emissions by the required fraction. Adjust the controls, then calculate.",
     )
 
     wb = _get("wb_path"); wm = _get("wash_model"); runs = _get("runs")
     if not wb:
-        st.warning("Upload your workbook on the **Data** page first."); page_close(); st.stop()
+        st.warning("Upload your workbook on the **Data** page first."); st.stop()
     if wm is None:
-        st.warning("Run the yield model on **Q1** first."); page_close(); st.stop()
+        st.warning("Run the yield model on **Q1** first."); st.stop()
 
-    section("Targets")
-    c1, c2, c3 = st.columns(3)
-    dose      = c1.selectbox("Carbon dose (%)", [0, 5, 10, 15], index=2)
-    yield_min = c2.slider("Minimum yield (%)", 50.0, 95.0, 80.0, 1.0)
-    reduction = c3.slider("Emission cut target", 0.10, 0.90, 0.50, 0.05, format="%.0f%%",
-                           help="Required reduction vs the no-carbon, least-washed reference.")
+    with panel("targets", "Targets"):
+        c1, c2, c3 = st.columns(3)
+        dose      = c1.selectbox("Carbon dose (%)", [0, 5, 10, 15], index=2)
+        yield_min = c2.slider("Minimum yield (%)", 50.0, 95.0, 80.0, 1.0)
+        reduction_pct = c3.slider(
+            "Emission cut target (%)", 10, 90, 50, 5, format="%d%%",
+            help="Required reduction vs the no-carbon, least-washed reference.",
+        )
+        reduction = reduction_pct / 100
 
-    if st.button("Calculate operating window", type="primary"):
-        with st.spinner("Searching the grid…"):
-            ctrl = pa.load_controls(wb)
-            grid, out_w = capture(pa.window, wm, runs, OUT, controls=ctrl,
-                                  dose=dose, reduction=reduction, yield_min=yield_min)
-        _set("window_grid", grid); _set("window_log", out_w)
-        st.success("Window calculated.")
+        if st.button("Calculate operating window", type="primary"):
+            with st.spinner("Searching the grid…"):
+                ctrl = pa.load_controls(wb)
+                grid, out_w = capture(pa.window, wm, runs, OUT, controls=ctrl,
+                                      dose=dose, reduction=reduction, yield_min=yield_min)
+            _set("window_grid", grid); _set("window_log", out_w)
+            st.success("Window calculated.")
 
-    if _get("window_log"):
-        with st.expander("Calculation output"):
-            st.code(_get("window_log"), language="")
+        if _get("window_log"):
+            with st.expander("Calculation output"):
+                st.code(_get("window_log"), language="")
 
     if _get("window_grid") is not None:
         grid = _get("window_grid")
 
-        section("Window plots")
-        c1, c2 = st.columns(2)
-        with c1: _img(os.path.join(OUT, "window_by_ratio.png"), "🟢 Robust   🟡 Point only   ⚪ Fails")
-        with c2: _img(os.path.join(OUT, "window_contour.png"),  "Desirability D (W = 10 mL/g)")
+        with panel("winplots", "Window plots"):
+            c1, c2 = st.columns(2)
+            with c1: _img(os.path.join(OUT, "window_by_ratio.png"), "🟢 Robust   🟡 Point only   ⚪ Fails")
+            with c2: _img(os.path.join(OUT, "window_contour.png"),  "Desirability D (W = 10 mL/g)")
 
-        section("Per-gas emission contours (W = 10 mL/g)")
         gas_imgs = sorted(glob.glob(os.path.join(OUT, "contour_*.png")))
         if gas_imgs:
-            cols = st.columns(len(gas_imgs))
-            for c, f in zip(cols, gas_imgs):
-                g = os.path.basename(f).replace("contour_", "").replace(".png", "")
-                c.image(PILImage.open(f), caption=g, use_container_width=True)
+            with panel("gascont", "Per-gas emission contours (W = 10 mL/g)"):
+                cols = st.columns(len(gas_imgs))
+                for c, f in zip(cols, gas_imgs):
+                    g = os.path.basename(f).replace("contour_", "").replace(".png", "")
+                    c.image(PILImage.open(f), caption=g, use_container_width=True)
 
-        section("Feasible settings")
-        ok = grid[grid.feasible_robust] if grid.feasible_robust.any() else grid[grid.feasible_point]
-        if ok.empty:
-            st.warning(
-                "No setting meets every target at these values. "
-                "Lower the emission cut (try 25%) or yield target and recalculate."
-            )
-        else:
-            rel_cols  = [c for c in ok.columns if c.endswith("_rel") and not c.endswith("_rel_hi")]
-            show_cols = ["T", "t", "W", "SRY", "desirability"] + rel_cols
-            st.dataframe(ok[show_cols].sort_values("desirability", ascending=False).head(20).round(3))
-            st.caption(
-                "T = temperature (°C) · t = time (min) · W = water:dust (mL/g) · "
-                "SRY = predicted yield (%) · D = desirability 0–1 · *_rel = emission / reference"
-            )
-        _dl(os.path.join(OUT, "operating_window.csv"),      "Download feasible settings (.csv)")
-        _dl(os.path.join(OUT, "operating_window_grid.csv"), "Download full grid (.csv)")
+        with panel(
+            "feasible", "Feasible settings",
+            "T = temperature (°C), t = time (min), W = water:dust (mL/g), "
+            "SRY = predicted yield (%), D = desirability (0 to 1), *_rel = emission / reference.",
+        ):
+            ok = grid[grid.feasible_robust] if grid.feasible_robust.any() else grid[grid.feasible_point]
+            if ok.empty:
+                st.warning(
+                    "No setting meets every target at these values. "
+                    "Lower the emission cut (try 25%) or the yield target and recalculate."
+                )
+            else:
+                rel_cols  = [c for c in ok.columns if c.endswith("_rel") and not c.endswith("_rel_hi")]
+                show_cols = ["T", "t", "W", "SRY", "desirability"] + rel_cols
+                st.dataframe(ok[show_cols].sort_values("desirability", ascending=False).head(20).round(3))
+            d1, d2, _sp = st.columns([1.6, 1.6, 4])
+            with d1: _dl(os.path.join(OUT, "operating_window.csv"),      "Feasible settings (.csv)")
+            with d2: _dl(os.path.join(OUT, "operating_window_grid.csv"), "Full grid (.csv)")
 
-        st.markdown(
-            '<br><a href="?page=q3" style="display:inline-block;background:#0f4c35;'
-            'color:#fff;padding:10px 24px;border-radius:8px;font-size:0.85rem;'
-            'font-weight:600;text-decoration:none;">Continue to Q3 →</a>',
-            unsafe_allow_html=True,
-        )
-
-    page_close()
+        st.button("Continue to Q3", type="primary", on_click=go, args=("q3",))
 
 
 # ══════════════════════════════════════════ PAGE: Q3
 elif page_key == "q3":
-    page_open(
-        "Q3 — Carbon Effect",
+    page_header(
+        "Q3 Carbon",
         "Does activated carbon reduce emissions further?",
-        "Compare emission levels across the four carbon doses (0, 5, 10, 15%) "
+        "Compare emission levels across the four carbon doses (0, 5, 10 and 15%) "
         "and test whether the carbon effect is statistically significant.",
     )
 
     wb = _get("wb_path"); runs = _get("runs")
     if not wb:
-        st.warning("Upload your workbook on the **Data** page first."); page_close(); st.stop()
+        st.warning("Upload your workbook on the **Data** page first."); st.stop()
 
-    section("Dose–response")
-    c1, c2 = st.columns([1, 3])
-    gas         = c1.selectbox("Gas", pa.GASES)
-    kind_choice = c1.radio("Response", ["net_peak", "net_plateau"])
-    y = f"{gas}_{kind_choice}"
+    with panel("dose", "Dose–response"):
+        c1, c2 = st.columns([1, 3])
+        gas         = c1.selectbox("Gas", pa.GASES)
+        kind_choice = c1.radio("Response", ["net_peak", "net_plateau"])
+        y = f"{gas}_{kind_choice}"
 
-    if y in runs.columns and runs[y].notna().sum() > 0:
-        fig, axes = plt.subplots(1, 2, figsize=(11, 4))
-        means = runs.groupby("Cpct")[y].mean()
-        axes[0].bar(means.index.astype(str), means.values, color="#0f4c35",
-                    width=0.5, edgecolor="white", linewidth=0.8)
-        axes[0].set(xlabel="Carbon dose (%)", ylabel=f"{gas} {kind_choice} (mean)",
-                    title="Mean by dose")
-        for T, g_df in runs.groupby("T"):
-            m = g_df.groupby("Cpct")[y].mean()
-            axes[1].plot(m.index, m.values, marker="o", linewidth=1.8, label=f"{T} °C")
-        axes[1].set(xlabel="Carbon dose (%)", ylabel=f"{gas}", title="Dose × temperature")
-        axes[1].legend(fontsize=8)
-        plt.tight_layout()
-        with c2: st.pyplot(fig); plt.close(fig)
-    else:
-        st.info(f"No data for {y}.")
+        if y in runs.columns and runs[y].notna().sum() > 0:
+            with plt.rc_context(MPL_RC):
+                fig, axes = plt.subplots(1, 2, figsize=(11, 4), constrained_layout=True)
+                means = runs.groupby("Cpct")[y].mean()
+                axes[0].bar(means.index.astype(str), means.values, color=BRAND, width=0.55)
+                axes[0].set(xlabel="Carbon dose (%)", ylabel=f"{gas} {kind_choice} (mean)",
+                            title="Mean by dose")
+                for T, g_df in runs.groupby("T"):
+                    m = g_df.groupby("Cpct")[y].mean()
+                    axes[1].plot(m.index, m.values, marker="o", markersize=5, linewidth=2,
+                                 label=f"{T} °C")
+                axes[1].set_xticks(sorted(runs["Cpct"].dropna().unique()))
+                axes[1].set(xlabel="Carbon dose (%)", ylabel=f"{gas}", title="Dose × temperature")
+                axes[1].legend(fontsize=8)
+            with c2:
+                st.pyplot(fig)
+            plt.close(fig)
+        else:
+            c2.info(f"No data for {y}.")
 
-    section("Carbon sub-plot model terms")
-    em_results = _get("em_results")
-    if em_results is None:
-        st.markdown(
-            '<div class="info-box">Run the emission analysis on Q1 Part B first.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        for key in [f"{gas}_net_peak", f"{gas}_net_plateau"]:
-            if key not in em_results: continue
-            mm = em_results[key]
-            pv = mm.pvalues.drop([i for i in mm.pvalues.index if i == "Group Var"], errors="ignore")
-            carbon_terms = pv[[i for i in pv.index if "Cc" in i or "carbon" in i.lower()]]
-            if len(carbon_terms) == 0:
-                st.write(f"No carbon terms in {key} model."); continue
-            df_ct = pd.DataFrame({"coef": mm.params[carbon_terms.index],
-                                   "p":    carbon_terms}).round(4)
-            df_ct["significant"] = df_ct["p"] < 0.05
-            st.caption(f"**{key}**")
-            st.dataframe(df_ct.style.map(
-                lambda v: "background-color:#dcfce7" if v else "", subset=["significant"]))
+    with panel("terms", "Carbon sub-plot model terms"):
+        em_results = _get("em_results")
+        if em_results is None:
+            callout("info", "Run the emission analysis on Q1 Part B first.")
+        else:
+            for key in [f"{gas}_net_peak", f"{gas}_net_plateau"]:
+                if key not in em_results: continue
+                mm = em_results[key]
+                pv = mm.pvalues.drop([i for i in mm.pvalues.index if i == "Group Var"], errors="ignore")
+                carbon_terms = pv[[i for i in pv.index if "Cc" in i or "carbon" in i.lower()]]
+                if len(carbon_terms) == 0:
+                    st.write(f"No carbon terms in {key} model."); continue
+                df_ct = pd.DataFrame({"coef": mm.params[carbon_terms.index],
+                                       "p":    carbon_terms}).round(4)
+                df_ct["significant"] = df_ct["p"] < 0.05
+                st.caption(f"**{key}**")
+                st.dataframe(df_ct.style.map(
+                    lambda v: "background-color:#d9e7de" if v else "", subset=["significant"]))
 
-    section("Net peak by dose — all gases")
-    fig2, ax2 = plt.subplots(2, 2, figsize=(12, 7))
-    for ax, g in zip(ax2.flat, pa.GASES):
-        yg = f"{g}_net_peak"
-        if yg not in runs or runs[yg].isna().all():
-            ax.set_visible(False); continue
-        runs.boxplot(column=yg, by="Cpct", ax=ax)
-        ax.set(title=g, xlabel="Carbon dose (%)", ylabel="Net peak")
-        plt.sca(ax); plt.title(g)
-    plt.suptitle("Net peak by carbon dose", y=1.01)
-    plt.tight_layout()
-    st.pyplot(fig2); plt.close(fig2)
+    with panel("boxes", "Net peak by dose, all gases"):
+        with plt.rc_context(MPL_RC):
+            fig2, ax2 = plt.subplots(2, 2, figsize=(12, 7), constrained_layout=True)
+            for ax, g in zip(ax2.flat, pa.GASES):
+                yg = f"{g}_net_peak"
+                if yg not in runs or runs[yg].isna().all():
+                    ax.set_visible(False); continue
+                doses = sorted(runs["Cpct"].dropna().unique())
+                data  = [runs.loc[runs["Cpct"] == d, yg].dropna().values for d in doses]
+                bp = ax.boxplot(
+                    data, patch_artist=True, widths=0.5,
+                    medianprops=dict(color=INK, linewidth=1.6),
+                    flierprops=dict(marker="o", markersize=3,
+                                    markerfacecolor="#8c978f", markeredgecolor="none"),
+                )
+                for patch in bp["boxes"]:
+                    patch.set(facecolor=SAGE, edgecolor=BRAND, linewidth=1.2)
+                for line in bp["whiskers"] + bp["caps"]:
+                    line.set(color=BRAND, linewidth=1.1)
+                ax.set_xticks(range(1, len(doses) + 1), [f"{d:g}" for d in doses])
+                ax.set(title=g, xlabel="Carbon dose (%)", ylabel="Net peak")
+            fig2.suptitle("Net peak by carbon dose", fontweight="600", fontsize=12)
+        st.pyplot(fig2)
+        plt.close(fig2)
 
     bh_path = os.path.join(OUT, "bh_correction.csv")
     if os.path.exists(bh_path):
-        section("Multiple-testing correction")
-        st.dataframe(pd.read_csv(bh_path, index_col=0).round(4))
-        st.caption("BH-adjusted p-values control the false-discovery rate.")
+        with panel("bh3", "Multiple-testing correction",
+                   "BH-adjusted p-values control the false-discovery rate."):
+            st.dataframe(pd.read_csv(bh_path, index_col=0).round(4))
 
-    section("Interpretation guide")
-    st.markdown(
-        "- **Cc** — linear dose effect: significant means more carbon changes emissions proportionally  \n"
-        "- **I(Cc²)** — curved effect: significant means diminishing returns or an optimum dose  \n"
-        "- **Cc:x1 / Cc:x2 / Cc:x3** — the carbon effect depends on temperature / time / ratio  \n"
-        "- PM2.5 and PM10 are excluded (sensor at ceiling throughout all runs)  \n"
-        "- Results from the **simulated workbook** only test the code and are not project findings"
-    )
-
-    page_close()
+    with panel("guide", "Interpretation guide"):
+        st.markdown(
+            "- **Cc**: linear dose effect. Significant means more carbon changes emissions proportionally.  \n"
+            "- **I(Cc²)**: curved effect. Significant means diminishing returns or an optimum dose.  \n"
+            "- **Cc:x1 / Cc:x2 / Cc:x3**: the carbon effect depends on temperature, time or ratio.  \n"
+            "- PM2.5 and PM10 are excluded because the sensor was at ceiling throughout all runs.  \n"
+            "- Results from the **simulated workbook** only test the code and are not project findings."
+        )
