@@ -35,6 +35,112 @@ CEILING   = {"PM2.5": 999, "PM10": 999, "CO2": 5000}
 WASH_TERMS = "x1 + x2 + x3 + x1:x2 + x1:x3 + x2:x3 + I(x1**2) + I(x2**2) + I(x3**2)"
 
 
+# ----------------------------------------------------------- column resolver
+# Maps canonical internal names → all accepted surface forms.
+# Resolution is case-insensitive and strips extra whitespace, so
+# "Temp (°C)", "TEMP(C)", "Temperature" all resolve to the same column.
+
+_ALIASES: dict[str, list[str]] = {
+    # ── Washing / PETER_runs shared ──────────────────────────────────────
+    "Temp (C)": [
+        "temp (c)", "temperature (c)", "temp (°c)", "temperature (°c)",
+        "temp(c)", "temperature", "temp", "t (°c)", "t (c)",
+    ],
+    "Time (min)": [
+        "time (min)", "time(min)", "time (minutes)", "time", "duration (min)",
+        "duration", "t (min)",
+    ],
+    "Water:dust (mL/g)": [
+        "water:dust (ml/g)", "water:dust (ml/g)", "water:dust(ml/g)",
+        "water:dust (ml/g)", "water : dust (ml/g)", "water/dust (ml/g)",
+        "w:d (ml/g)", "water ratio (ml/g)", "water ratio", "ratio (ml/g)",
+        "w (ml/g)", "water:dust",
+    ],
+    # ── Washing only ─────────────────────────────────────────────────────
+    "Run": ["run", "run no", "run no.", "run number", "run #", "id"],
+    "Initial dust M0 (g)": [
+        "initial dust m0 (g)", "m0 (g)", "m0(g)", "initial mass (g)",
+        "initial dust (g)", "initial weight (g)", "m0",
+    ],
+    "Final dry mass Md (g)": [
+        "final dry mass md (g)", "md (g)", "md(g)", "final mass (g)",
+        "dry mass (g)", "final dry mass (g)", "md",
+    ],
+    # ── PETER_runs only ──────────────────────────────────────────────────
+    "Wash run": [
+        "wash run", "wash", "wash no", "wash no.", "wash id",
+        "washing run", "run (wash)", "wash run no",
+    ],
+    "Carbon (% of dust)": [
+        "carbon (% of dust)", "carbon (%)", "carbon(%)", "carbon % of dust",
+        "activated carbon (%)", "ac (%)", "c (%)", "carbon dose (%)",
+        "carbon dose", "carbon addition (%)",
+    ],
+    "Date": ["date", "run date", "test date", "day", "experiment date"],
+}
+
+# Gas sensor columns: auto-generate aliases for HCHO baseline / peak / plateau etc.
+for _g in GASES + ["PM2.5", "PM10"]:
+    for _k in ("baseline", "peak", "plateau", "area"):
+        _canonical = f"{_g} {_k}"
+        _ALIASES[_canonical] = [
+            f"{_g} {_k}",
+            f"{_g.lower()} {_k}",
+            f"{_g}{_k}",          # e.g. HCHOpeak
+            f"{_g}_{_k}",         # e.g. HCHO_peak
+            f"{_g} {_k} conc",
+            f"{_g} {_k} (ppm)",
+            f"{_g} {_k} (ppb)",
+            f"{_g} {_k} reading",
+        ]
+
+
+def _normalise(s: str) -> str:
+    """Lowercase, collapse whitespace, strip punctuation clutter."""
+    import re
+    return re.sub(r"\s+", " ", str(s).strip().lower())
+
+
+def _resolve_columns(actual_cols: list[str], required: list[str]) -> tuple[dict[str, str], list[str]]:
+    """Return (rename_map, unresolved_list).
+
+    rename_map  : {actual_col_name: canonical_name}  for every required column found
+    unresolved  : canonical names that couldn't be matched
+    """
+    norm_actual = {_normalise(c): c for c in actual_cols}
+    rename_map: dict[str, str] = {}
+    unresolved: list[str] = []
+
+    for canon in required:
+        # 1. exact match first
+        if canon in actual_cols:
+            rename_map[canon] = canon
+            continue
+        # 2. normalised exact match
+        nc = _normalise(canon)
+        if nc in norm_actual:
+            rename_map[norm_actual[nc]] = canon
+            continue
+        # 3. alias list
+        aliases = [_normalise(a) for a in _ALIASES.get(canon, [])]
+        matched = next((norm_actual[a] for a in aliases if a in norm_actual), None)
+        if matched:
+            rename_map[matched] = canon
+            continue
+        # 4. substring heuristic: canonical words all appear somewhere in an actual col
+        canon_words = set(_normalise(canon).split())
+        candidates = [
+            orig for norm, orig in norm_actual.items()
+            if canon_words.issubset(set(norm.split()))
+        ]
+        if len(candidates) == 1:
+            rename_map[candidates[0]] = canon
+            continue
+        unresolved.append(canon)
+
+    return rename_map, unresolved
+
+
 # ----------------------------------------------------------- input check
 REQUIRED = {
     "Washing":    ["Run", "Temp (C)", "Time (min)", "Water:dust (mL/g)",
@@ -44,23 +150,39 @@ REQUIRED = {
                   + [f"{g} {k}" for g in GASES for k in ("baseline", "peak", "plateau")],
 }
 
+# Columns in PETER_runs that are allowed to be absent (sensor not yet measured)
+_OPTIONAL = {f"{g} {k}" for g in GASES + ["PM2.5", "PM10"] for k in ("baseline", "peak", "plateau", "area")}
+
 
 def check_workbook(path):
-    """Fail early with a clear message if a sheet or column is missing."""
+    """Fail early with a clear message if a sheet or required column is missing.
+
+    Uses fuzzy matching so minor name variations are accepted automatically.
+    """
     if not os.path.exists(path):
         raise FileNotFoundError(f"File not found: {path}")
     xl = pd.ExcelFile(path)
     problems = []
-    for sheet, cols in REQUIRED.items():
+    for sheet, required_cols in REQUIRED.items():
         if sheet not in xl.sheet_names:
-            problems.append(f"missing sheet '{sheet}' (found: {', '.join(xl.sheet_names)})")
+            problems.append(
+                f"Missing sheet '{sheet}' — found: {', '.join(xl.sheet_names)}")
             continue
         have = list(pd.read_excel(path, sheet_name=sheet, nrows=0).columns)
-        miss = [c for c in cols if c not in have]
-        if miss:
-            problems.append(f"sheet '{sheet}' is missing columns: {', '.join(miss)}")
+        _, unresolved = _resolve_columns(have, required_cols)
+        # Gas sensor columns are optional (data may not be collected yet)
+        hard_missing = [c for c in unresolved if c not in _OPTIONAL]
+        if hard_missing:
+            problems.append(
+                f"Sheet '{sheet}' — cannot match these required columns: "
+                + ", ".join(f"'{c}'" for c in hard_missing)
+                + f"\n    Columns found: {', '.join(have)}"
+            )
     if problems:
-        raise ValueError("The workbook does not match the expected layout:\n  - " + "\n  - ".join(problems))
+        raise ValueError(
+            "Workbook layout problem — rename the highlighted columns "
+            "and re-upload:\n\n  • " + "\n  • ".join(problems)
+        )
     print(f"Workbook OK: {os.path.basename(path)}")
 
 
@@ -73,17 +195,43 @@ def coded(df):
     return df
 
 
+def _apply_resolver(df: pd.DataFrame, required: list[str], sheet: str) -> pd.DataFrame:
+    """Rename df columns to canonical names using the fuzzy resolver.
+
+    Logs what was auto-mapped; raises ValueError for hard-missing columns.
+    """
+    rename_map, unresolved = _resolve_columns(list(df.columns), required)
+    hard_missing = [c for c in unresolved if c not in _OPTIONAL]
+    if hard_missing:
+        raise ValueError(
+            f"Sheet '{sheet}': cannot match required columns "
+            + ", ".join(f"'{c}'" for c in hard_missing)
+            + f"\n  Actual columns: {', '.join(df.columns)}"
+        )
+    # Report any non-trivial remaps so the user knows what was auto-matched
+    non_trivial = {k: v for k, v in rename_map.items() if k != v}
+    if non_trivial:
+        print(f"  Auto-matched columns in '{sheet}':")
+        for actual, canon in non_trivial.items():
+            print(f"    '{actual}'  →  '{canon}'")
+    return df.rename(columns=rename_map)
+
+
 def load_washing(path):
     w = pd.read_excel(path, sheet_name="Washing")
+    w = _apply_resolver(w, REQUIRED["Washing"], "Washing")
     w = w.rename(columns={"Temp (C)": "T", "Time (min)": "t", "Water:dust (mL/g)": "W",
                            "Initial dust M0 (g)": "M0", "Final dry mass Md (g)": "Md"})
-    w = w[["Run", "T", "t", "W", "M0", "Md"]]
+    # Keep only the columns we need; ignore any extra columns in the sheet
+    keep = [c for c in ["Run", "T", "t", "W", "M0", "Md"] if c in w.columns]
+    w = w[keep]
     w["SRY"] = w["Md"] / w["M0"] * 100
     return coded(w)
 
 
 def load_runs(path):
     r = pd.read_excel(path, sheet_name="PETER_runs")
+    r = _apply_resolver(r, REQUIRED["PETER_runs"], "PETER_runs")
     r = r.rename(columns={"Wash run": "wash", "Temp (C)": "T", "Time (min)": "t",
                            "Water:dust (mL/g)": "W", "Carbon (% of dust)": "Cpct", "Date": "day"})
     for g in GASES + ["PM2.5", "PM10"]:
