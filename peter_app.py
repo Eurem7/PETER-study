@@ -1,8 +1,7 @@
 """PETER Study — Streamlit Web Interface
 Run:  streamlit run peter_app.py
 
-Place the accompanying config.toml at  .streamlit/config.toml  (next to this file)
-so native widgets pick up the same colours as the custom CSS below.
+Place the accompanying config at  .streamlit/config.toml  next to this file.
 """
 
 import os, sys, pathlib, importlib.util, re, io, contextlib, glob
@@ -21,7 +20,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────── design tokens
-BRAND  = "#14452f"   # spruce
+BRAND  = "#14452f"
 MOSS   = "#3f7d58"
 SAGE   = "#d9e7de"
 INK    = "#16201b"
@@ -80,7 +79,7 @@ st.markdown("""
 [data-testid="collapsedControl"],
 [data-testid="stSidebarCollapsedControl"] { display: none !important; }
 
-/* ── Page container (replaces the old unclosed .page-shell div) ── */
+/* ── Page container ── */
 .block-container {
     max-width: 1180px !important;
     padding: 18px 28px 72px !important;
@@ -112,7 +111,7 @@ st.markdown("""
 .brand-sub  { font-size: 0.72rem; color: var(--slate); line-height: 1.2; }
 .nav-version { text-align: right; font-size: 0.72rem; color: var(--faint); }
 
-/* the nav is a native st.radio restyled as tabs, so clicking never reloads the session */
+/* native st.radio restyled as tab strip */
 .st-key-topnav [data-testid="stRadio"] > label { display: none; }
 .st-key-topnav [role="radiogroup"] { gap: 4px; flex-wrap: nowrap; justify-content: center; }
 .st-key-topnav [role="radiogroup"] > label {
@@ -163,7 +162,7 @@ st.markdown("""
     margin: 0;
 }
 
-/* ── Panels (keyed containers) ── */
+/* ── Panels ── */
 [class*="st-key-panel_"] {
     background: var(--paper);
     border: 1px solid var(--line);
@@ -190,7 +189,7 @@ st.markdown("""
     max-width: 80ch;
 }
 
-/* ── Stat band: one joined strip instead of separate cards ── */
+/* ── Stat band ── */
 .stat-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -215,6 +214,23 @@ st.markdown("""
     font-variant-numeric: tabular-nums;
 }
 .stat-box .s-sub { font-size: 0.74rem; color: var(--faint); margin-top: 3px; }
+
+/* ── Column mapping table ── */
+.col-map-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+.col-map-table th {
+    background: var(--sage-soft);
+    color: var(--brand);
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--line-strong);
+}
+.col-map-table td { padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.col-map-table tr:last-child td { border-bottom: none; }
+.col-map-table .canon { font-family: 'IBM Plex Mono', monospace; color: var(--ink); font-weight: 500; }
+.col-map-table .accept { color: var(--slate); font-size: 0.78rem; line-height: 1.6; }
+.col-map-table .req { color: var(--brand); font-size: 0.72rem; font-weight: 600; }
+.col-map-table .opt { color: var(--faint);  font-size: 0.72rem; }
 
 /* ── Step list (empty state) ── */
 .step-callout {
@@ -268,11 +284,6 @@ st.markdown("""
     border-color: var(--brand-deep);
     color: #fff;
 }
-.stApp [data-testid="stBaseButton-primary"]:focus-visible,
-.stApp button[kind="primary"]:focus-visible {
-    outline: 3px solid var(--sage);
-    outline-offset: 1px;
-}
 .stApp [data-testid="stBaseButton-primary"] p,
 .stApp button[kind="primary"] p { color: #fff; font-size: 0.86rem; }
 
@@ -305,7 +316,7 @@ div[data-testid="stRadio"] label p { font-size: 0.84rem; font-weight: 500; color
 }
 [data-testid="stFileUploaderDropzone"]:hover { border-color: var(--moss); }
 
-/* ── Expanders, tables, code, images ── */
+/* ── Misc components ── */
 [data-testid="stExpander"] {
     border: 1px solid var(--line) !important;
     border-radius: 8px !important;
@@ -313,22 +324,11 @@ div[data-testid="stRadio"] label p { font-size: 0.84rem; font-weight: 500; color
     margin-top: 6px;
 }
 [data-testid="stExpander"] summary p { font-size: 0.88rem; font-weight: 500; }
-
-[data-testid="stDataFrame"] {
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-}
+[data-testid="stDataFrame"] { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 [data-testid="stCode"] pre { font-size: 0.78rem; line-height: 1.55; }
 [data-testid="stCode"] { border: 1px solid var(--line); border-radius: 8px; }
-
-[data-testid="stImage"] img {
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-}
+[data-testid="stImage"] img { border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 [data-testid="stImageCaption"] { color: var(--slate); font-size: 0.78rem; }
-
 [data-testid="stAlert"] { border-radius: 8px; font-size: 0.86rem; }
 
 /* ── Narrow screens ── */
@@ -343,8 +343,7 @@ div[data-testid="stRadio"] label p { font-size: 0.84rem; font-weight: 500; color
 </style>
 """, unsafe_allow_html=True)
 
-# Matplotlib look for the charts drawn inside this app (scoped with rc_context,
-# so figures produced by peter_analysis.py are left untouched).
+# Matplotlib style for in-app charts
 MPL_RC = {
     "font.family": "sans-serif",
     "font.size": 9.5,
@@ -412,7 +411,6 @@ def capture(func, *args, **kwargs):
     return result, buf.getvalue()
 
 def go(page):
-    """Button callback: switch page without reloading the session."""
     st.session_state["nav"] = page
 
 # ─────────────────────────────────────────────── UI helpers
@@ -444,7 +442,6 @@ def page_header(crumb, title, subtitle):
     )
 
 def _keyed_container(key):
-    # st.container(key=...) needs Streamlit >= 1.39; fall back gracefully on older versions.
     try:
         return st.container(key=key)
     except TypeError:
@@ -459,6 +456,7 @@ def panel(key, title, desc=""):
             unsafe_allow_html=True,
         )
         yield
+
 
 # ─────────────────────────────────────────────── top nav
 data_ok = _get("wb_path") is not None
@@ -499,12 +497,16 @@ if page_key == "load":
     page_header(
         "Data",
         "Load your workbook",
-        "Upload PETER_Data_Workbook.xlsx to begin. Every analysis page reads from this file.",
+        "Upload PETER_Data_Workbook.xlsx to begin. "
+        "Column names are matched automatically — minor differences in spelling or "
+        "capitalisation are handled without any changes to your file.",
     )
 
     with panel("upload", "Workbook file", "Accepts .xlsx and .xlsm files."):
-        uploaded = st.file_uploader("Choose your workbook (.xlsx)", type=["xlsx", "xlsm"],
-                                    label_visibility="collapsed")
+        uploaded = st.file_uploader(
+            "Choose your workbook (.xlsx)", type=["xlsx", "xlsm"],
+            label_visibility="collapsed",
+        )
         if uploaded:
             wb_path = os.path.join(OUT, uploaded.name)
             with open(wb_path, "wb") as f: f.write(uploaded.read())
@@ -516,7 +518,10 @@ if page_key == "load":
                 _set("wash", wash); _set("runs", runs)
                 st.success(f"Loaded **{uploaded.name}**")
             except Exception as e:
-                st.error(f"Problem reading workbook: {e}"); st.stop()
+                st.error(str(e))
+                # Show the column guide automatically on error
+                _set("show_col_guide", True)
+                st.stop()
 
     wb = _get("wb_path")
     if wb:
@@ -556,11 +561,77 @@ if page_key == "load":
                     "The analysis skips any response with fewer than 20 non-missing values.")
 
         st.button("Continue to Q1", type="primary", on_click=go, args=("q1",))
+
     else:
         with panel("steps", "How it works"):
             step_note(1, "Upload your workbook", "Use the file picker above to choose your .xlsx file.")
-            step_note(2, "Inspect both sheets", "A preview of the Washing and PETER_runs sheets appears here.")
-            step_note(3, "Work through Q1 to Q3", "Use the navigation bar at the top to move through the analysis in order.")
+            step_note(2, "Inspect both sheets",  "Previews of the Washing and PETER_runs sheets appear here.")
+            step_note(3, "Work through Q1 → Q3", "Use the navigation bar at the top to move through the analysis in order.")
+
+    # ── Column name reference guide ──────────────────────────────────────
+    # Shows automatically on a column-mismatch error; always available to expand.
+    show_guide = _get("show_col_guide", False)
+    with st.expander("📋 Column name reference — click to view accepted names", expanded=show_guide):
+        st.markdown(
+            "The pipeline matches your column names automatically. "
+            "If a column cannot be matched it will be listed in the error above. "
+            "Use this table to check the exact name or any accepted alternative.",
+            unsafe_allow_html=False,
+        )
+
+        WASH_COLS = [
+            ("Run",                   True,  "Run, Run No, Run Number, ID"),
+            ("Temp (C)",              True,  "Temperature (C), Temp (°C), Temperature (°C), Temp"),
+            ("Time (min)",            True,  "Time (minutes), Duration (min), t (min)"),
+            ("Water:dust (mL/g)",     True,  "Water:dust (ml/g), Water/dust (mL/g), Water ratio (mL/g), Ratio (mL/g)"),
+            ("Initial dust M0 (g)",   True,  "M0 (g), Initial mass (g), Initial weight (g), M0"),
+            ("Final dry mass Md (g)", True,  "Md (g), Final mass (g), Dry mass (g), Md"),
+        ]
+        RUNS_COLS = [
+            ("Wash run",              True,  "Wash, Wash No, Washing run, Run (wash)"),
+            ("Temp (C)",              True,  "— same as Washing sheet —"),
+            ("Time (min)",            True,  "— same as Washing sheet —"),
+            ("Water:dust (mL/g)",     True,  "— same as Washing sheet —"),
+            ("Carbon (% of dust)",    True,  "Carbon (%), Carbon dose (%), AC (%), C (%), Activated carbon (%)"),
+            ("Date",                  True,  "Run date, Test date, Day, Experiment date"),
+            ("HCHO baseline / peak / plateau", False, "HCHO_baseline, hcho baseline, HCHO baseline (ppm) …"),
+            ("TVOC baseline / peak / plateau", False, "TVOC_baseline, tvoc baseline …"),
+            ("CO baseline / peak / plateau",   False, "CO_baseline, co baseline …"),
+            ("CO2 baseline / peak / plateau",  False, "CO2_baseline, co2 baseline …"),
+        ]
+
+        def _col_rows(rows):
+            html = ""
+            for canon, required, accepted in rows:
+                req_badge = '<span class="req">Required</span>' if required else '<span class="opt">Optional</span>'
+                html += (
+                    f"<tr><td class='canon'>{canon}</td>"
+                    f"<td class='accept'>{accepted}</td>"
+                    f"<td>{req_badge}</td></tr>"
+                )
+            return html
+
+        table_html = """
+        <table class="col-map-table">
+        <thead><tr><th>Canonical column name</th><th>Also accepted (examples)</th><th></th></tr></thead>
+        <tbody>
+        <tr><td colspan="3" style="background:var(--sage-soft);font-weight:600;
+            padding:8px 12px;font-size:0.82rem;color:var(--brand);">
+            Sheet: Washing</td></tr>
+        {wash}
+        <tr><td colspan="3" style="background:var(--sage-soft);font-weight:600;
+            padding:8px 12px;font-size:0.82rem;color:var(--brand);">
+            Sheet: PETER_runs</td></tr>
+        {runs}
+        </tbody></table>
+        """.format(wash=_col_rows(WASH_COLS), runs=_col_rows(RUNS_COLS))
+        st.markdown(table_html, unsafe_allow_html=True)
+
+        callout("note",
+                "If your column is not in the accepted list, rename it to match the "
+                "<b>Canonical column name</b> exactly, then re-upload.")
+        if show_guide:
+            _set("show_col_guide", False)   # reset so it doesn't auto-expand next time
 
 
 # ══════════════════════════════════════════ PAGE: Q1
@@ -569,7 +640,7 @@ elif page_key == "q1":
         "Q1 Washing",
         "Does hot-water washing reduce emissions?",
         "Run Part A to fit the yield model, then Part B to analyse HCHO, TVOC, CO and CO₂. "
-        "Work through them in order, because Part B uses the yield model from Part A.",
+        "Work through them in order — Part B uses the yield model from Part A.",
     )
 
     wb = _get("wb_path")
@@ -594,7 +665,7 @@ elif page_key == "q1":
             with st.expander("Full model output"):
                 st.code(_get("part1_log"), language="")
             c1, c2 = st.columns(2)
-            with c1: _img(os.path.join(OUT, "part1_fit.png"), "Observed vs fitted Md")
+            with c1: _img(os.path.join(OUT, "part1_fit.png"),  "Observed vs fitted Md")
             with c2: _img(os.path.join(OUT, "diag_part1.png"), "Residual diagnostics")
             eq_path = os.path.join(OUT, "equation_Md.txt")
             if os.path.exists(eq_path):
@@ -612,7 +683,7 @@ elif page_key == "q1":
         "carbon dose is the sub-plot factor tested within each wash.",
     ):
         if _get("wash_model") is None:
-            callout("info", "Run Part A above first. The emission analysis uses the yield model.")
+            callout("info", "Run Part A above first — the emission analysis uses the yield model.")
         elif st.button("Run emission analysis", type="primary"):
             with st.spinner("Fitting split-plot models for all four gases…"):
                 em_results, out2 = capture(pa.part2, runs, OUT, _get("wash_model"))
@@ -669,8 +740,8 @@ elif page_key == "q2":
 
     with panel("targets", "Targets"):
         c1, c2, c3 = st.columns(3)
-        dose      = c1.selectbox("Carbon dose (%)", [0, 5, 10, 15], index=2)
-        yield_min = c2.slider("Minimum yield (%)", 50.0, 95.0, 80.0, 1.0)
+        dose          = c1.selectbox("Carbon dose (%)", [0, 5, 10, 15], index=2)
+        yield_min     = c2.slider("Minimum yield (%)", 50.0, 95.0, 80.0, 1.0)
         reduction_pct = c3.slider(
             "Emission cut target (%)", 10, 90, 50, 5, format="%d%%",
             help="Required reduction vs the no-carbon, least-washed reference.",
@@ -707,8 +778,8 @@ elif page_key == "q2":
 
         with panel(
             "feasible", "Feasible settings",
-            "T = temperature (°C), t = time (min), W = water:dust (mL/g), "
-            "SRY = predicted yield (%), D = desirability (0 to 1), *_rel = emission / reference.",
+            "T = temperature (°C) · t = time (min) · W = water:dust (mL/g) · "
+            "SRY = predicted yield (%) · D = desirability 0–1 · *_rel = emission / reference.",
         ):
             ok = grid[grid.feasible_robust] if grid.feasible_robust.any() else grid[grid.feasible_point]
             if ok.empty:
