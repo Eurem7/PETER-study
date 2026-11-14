@@ -3,7 +3,7 @@
 **Project title**: Effect of Hot-Water Washing and Activated Carbon on Formaldehyde and VOC Emissions from MDF Dust  
 **Department**: Wood and Biomaterials Engineering, University of Ibadan  
 **Supervisor**: Dr. Kolajo  
-**Statistics collaborator**: Dr. Olu (400-level Statistics, University of Ibadan)
+
 
 ---
 
