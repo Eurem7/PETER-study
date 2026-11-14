@@ -1,0 +1,11 @@
+# Save as  .streamlit/config.toml  next to peter_app.py
+[theme]
+base = "light"
+primaryColor = "#14452f"
+backgroundColor = "#eef1ee"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#16201b"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
