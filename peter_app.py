@@ -46,7 +46,7 @@ pa, pa_ver = load_pa()
 
 # ───────────────────────────────────────────────────────── sidebar nav
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/en/8/8c/University_of_Ibadan_logo.png",
-                 width=80, use_container_width=False)
+                 width=80)
 st.sidebar.title("PETER Study")
 st.sidebar.caption(f"Analysis pipeline v{pa_ver}")
 
@@ -80,7 +80,7 @@ def _set(key, val):
 
 def _img(path, caption=""):
     if os.path.exists(path):
-        st.image(PILImage.open(path), caption=caption, use_container_width=True)
+        st.image(PILImage.open(path), caption=caption, width="stretch")
 
 def _dl(path, label="Download"):
     if os.path.exists(path):
@@ -284,7 +284,7 @@ elif page_key == "q2":
             cols = st.columns(len(gas_imgs))
             for c, f in zip(cols, gas_imgs):
                 g = os.path.basename(f).replace("contour_", "").replace(".png", "")
-                c.image(PILImage.open(f), caption=g, use_container_width=True)
+                c.image(PILImage.open(f), caption=g, width="stretch")
 
         st.subheader("Feasible settings table")
         ok = grid[grid.feasible_robust] if grid.feasible_robust.any() else grid[grid.feasible_point]
@@ -362,7 +362,7 @@ elif page_key == "q3":
                                    "p":    carbon_terms}).round(4)
             df_ct["significant"] = df_ct["p"] < 0.05
             st.subheader(f"{key} — carbon terms")
-            st.dataframe(df_ct.style.applymap(
+            st.dataframe(df_ct.style.map(
                 lambda v: "background-color: #d4edda" if v else "", subset=["significant"]))
 
     # ---- box plots across all gases
