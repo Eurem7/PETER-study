@@ -571,13 +571,25 @@ if page_key == "load":
     # ── Column name reference guide ──────────────────────────────────────
     # Shows automatically on a column-mismatch error; always available to expand.
     show_guide = _get("show_col_guide", False)
-    with st.expander("📋 Column name reference — click to view accepted names", expanded=show_guide):
+    with st.expander("📋 Sheet & column name reference — click to view accepted names", expanded=show_guide):
         st.markdown(
-            "The pipeline matches your column names automatically. "
-            "If a column cannot be matched it will be listed in the error above. "
+            "The pipeline matches both **sheet names** and **column names** automatically. "
+            "If something cannot be matched it will be listed in the error above. "
             "Use this table to check the exact name or any accepted alternative.",
             unsafe_allow_html=False,
         )
+        st.markdown("**Accepted sheet names**")
+        sheet_rows = {
+            "Washing":    "Wash, Washes, Washing runs, Washing data, Wash runs, Part 1",
+            "PETER_runs": "PETER runs, PETER, Peter Run, Emission runs, Runs, Part 2, Chamber runs",
+            "Controls":   "Control, Raw dust, Raw, Reference, Control runs  *(optional sheet)*",
+        }
+        sh_html = '<table class="col-map-table"><thead><tr><th>Canonical sheet name</th><th>Also accepted (examples)</th></tr></thead><tbody>'
+        for canon, accepted in sheet_rows.items():
+            sh_html += f"<tr><td class='canon'>{canon}</td><td class='accept'>{accepted}</td></tr>"
+        sh_html += "</tbody></table>"
+        st.markdown(sh_html, unsafe_allow_html=True)
+        st.markdown("<br>**Accepted column names**", unsafe_allow_html=True)
 
         WASH_COLS = [
             ("Run",                   True,  "Run, Run No, Run Number, ID"),
