@@ -154,33 +154,70 @@ REQUIRED = {
 _OPTIONAL = {f"{g} {k}" for g in GASES + ["PM2.5", "PM10"] for k in ("baseline", "peak", "plateau", "area")}
 
 
+# ── Sheet name aliases ──────────────────────────────────────────────────────
+_SHEET_ALIASES: dict[str, list[str]] = {
+    "Washing": [
+        "washing", "wash", "washes", "washing runs", "washing data",
+        "wash runs", "part 1", "part1", "sheet1", "washing sheet",
+    ],
+    "PETER_runs": [
+        "peter_runs", "peter runs", "peter", "peter run", "emission runs",
+        "emissions", "runs", "peter data", "part 2", "part2",
+        "emission data", "chamber runs", "chamber", "sheet2",
+    ],
+    "Controls": [
+        "controls", "control", "raw dust", "raw", "reference",
+        "control runs", "baseline runs",
+    ],
+}
+
+
+def _resolve_sheet(actual_sheets: list[str], canonical: str) -> str | None:
+    """Return the actual sheet name that best matches a canonical name, or None."""
+    if canonical in actual_sheets:
+        return canonical
+    norm_actual = {_normalise(s): s for s in actual_sheets}
+    nc = _normalise(canonical)
+    if nc in norm_actual:
+        return norm_actual[nc]
+    for alias in _SHEET_ALIASES.get(canonical, []):
+        if alias in norm_actual:
+            return norm_actual[alias]
+    return None
+
+
 def check_workbook(path):
     """Fail early with a clear message if a sheet or required column is missing.
 
-    Uses fuzzy matching so minor name variations are accepted automatically.
+    Uses fuzzy matching for both sheet names and column names, so minor
+    spelling/capitalisation differences are handled automatically.
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"File not found: {path}")
     xl = pd.ExcelFile(path)
     problems = []
-    for sheet, required_cols in REQUIRED.items():
-        if sheet not in xl.sheet_names:
+    for canon_sheet, required_cols in REQUIRED.items():
+        actual_sheet = _resolve_sheet(xl.sheet_names, canon_sheet)
+        if actual_sheet is None:
             problems.append(
-                f"Missing sheet '{sheet}' — found: {', '.join(xl.sheet_names)}")
+                f"Cannot find sheet '{canon_sheet}' — "
+                f"sheets in workbook: {', '.join(xl.sheet_names)}"
+            )
             continue
-        have = list(pd.read_excel(path, sheet_name=sheet, nrows=0).columns)
+        if actual_sheet != canon_sheet:
+            print(f"  Auto-matched sheet: '{actual_sheet}' → '{canon_sheet}'")
+        have = list(pd.read_excel(path, sheet_name=actual_sheet, nrows=0).columns)
         _, unresolved = _resolve_columns(have, required_cols)
-        # Gas sensor columns are optional (data may not be collected yet)
         hard_missing = [c for c in unresolved if c not in _OPTIONAL]
         if hard_missing:
             problems.append(
-                f"Sheet '{sheet}' — cannot match these required columns: "
+                f"Sheet '{actual_sheet}' — cannot match these required columns: "
                 + ", ".join(f"'{c}'" for c in hard_missing)
                 + f"\n    Columns found: {', '.join(have)}"
             )
     if problems:
         raise ValueError(
-            "Workbook layout problem — rename the highlighted columns "
+            "Workbook layout problem — rename the highlighted sheets or columns "
             "and re-upload:\n\n  • " + "\n  • ".join(problems)
         )
     print(f"Workbook OK: {os.path.basename(path)}")
@@ -218,7 +255,9 @@ def _apply_resolver(df: pd.DataFrame, required: list[str], sheet: str) -> pd.Dat
 
 
 def load_washing(path):
-    w = pd.read_excel(path, sheet_name="Washing")
+    xl = pd.ExcelFile(path)
+    sheet = _resolve_sheet(xl.sheet_names, "Washing") or "Washing"
+    w = xl.parse(sheet)
     w = _apply_resolver(w, REQUIRED["Washing"], "Washing")
     w = w.rename(columns={"Temp (C)": "T", "Time (min)": "t", "Water:dust (mL/g)": "W",
                            "Initial dust M0 (g)": "M0", "Final dry mass Md (g)": "Md"})
@@ -230,7 +269,9 @@ def load_washing(path):
 
 
 def load_runs(path):
-    r = pd.read_excel(path, sheet_name="PETER_runs")
+    xl = pd.ExcelFile(path)
+    sheet = _resolve_sheet(xl.sheet_names, "PETER_runs") or "PETER_runs"
+    r = xl.parse(sheet)
     r = _apply_resolver(r, REQUIRED["PETER_runs"], "PETER_runs")
     r = r.rename(columns={"Wash run": "wash", "Temp (C)": "T", "Time (min)": "t",
                            "Water:dust (mL/g)": "W", "Carbon (% of dust)": "Cpct", "Date": "day"})
@@ -253,7 +294,11 @@ def load_runs(path):
 def load_controls(path):
     """Raw-dust control runs (untreated reference), if they have been measured."""
     try:
-        c = pd.read_excel(path, sheet_name="Controls")
+        xl = pd.ExcelFile(path)
+        sheet = _resolve_sheet(xl.sheet_names, "Controls")
+        if sheet is None:
+            return pd.DataFrame()
+        c = xl.parse(sheet)
     except Exception:
         return pd.DataFrame()
     c = c[c["Type"].astype(str).str.contains("raw", case=False, na=False)].copy()
