@@ -162,8 +162,9 @@ _SHEET_ALIASES: dict[str, list[str]] = {
     ],
     "PETER_runs": [
         "peter_runs", "peter runs", "peter", "peter run", "emission runs",
-        "emissions", "runs", "peter data", "part 2", "part2",
-        "emission data", "chamber runs", "chamber", "sheet2",
+        "emission_runs", "emissions", "runs", "peter data", "part 2", "part2",
+        "emission data", "chamber runs", "chamber", "sheet2", "trial runs",
+        "pretreatment runs", "retort runs",
     ],
     "Controls": [
         "controls", "control", "raw dust", "raw", "reference",
